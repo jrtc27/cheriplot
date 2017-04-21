@@ -97,9 +97,9 @@ class ProgressTimer:
     def __enter__(self):
         self.start = datetime.now()
         self.logger.info("%s started at %s", self.msg,
-                         self.start.isoformat(timespec="seconds"))
+                         self.start.isoformat())
 
     def __exit__(self, type, value, traceback):
         end = datetime.now()
         self.logger.info("%s done at %s (time %s)", self.msg,
-                         end.isoformat(timespec="seconds"), end - self.start)
+                         end.isoformat(), end - self.start)
