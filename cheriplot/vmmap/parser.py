@@ -69,7 +69,7 @@ class VMMapFileParser(ConfigurableComponent):
             logger.info("Try to load vmmap_dump memory map file")
             vmmap_dump_cols = ["start", "end", "offset", "perm", "res", "pres",
                                "ref", "shd", "flag", "tp", "path"]
-            vmmap = pd.read_csv(self.map_file, names=vmmap_dump_cols)
+            vmmap = pd.read_csv(self.map_file, names=vmmap_dump_cols, comment="#")
         else:
             logger.info("Try to load procstat memory map file")
             procstat_cols = ["pid", "start", "end", "perm", "res", "pres",
