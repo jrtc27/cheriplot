@@ -195,7 +195,7 @@ class HistogramPatchBuilder(PatchBuilder):
     def _get_positions(self):
         """X locations of the histogram bars."""
         step = 2
-        return range(1, step * self.hist.norm_histogram.shape[0] + 1, step)
+        return range(2, step * self.hist.norm_histogram.shape[0] + 2, step)
 
     def get_legend(self):
         legend_handles = []
@@ -211,7 +211,7 @@ class HistogramPatchBuilder(PatchBuilder):
 
     def get_bbox(self):
         positions = list(self._get_positions())
-        return Bbox.from_extents(0, 0, positions[-1] + 1, 1.1)
+        return Bbox.from_extents(0, 0, positions[-1] + 2, 1.1)
 
     def get_xticks(self):
         return self._get_positions()
@@ -237,7 +237,7 @@ class HistogramPatchBuilder(PatchBuilder):
         norm_hist = self.hist.norm_histogram
         abs_hist = self.hist.abs_histogram
         step = 2
-        positions = range(1, step * norm_hist.shape[0] + 1, step)
+        positions = range(2, step * norm_hist.shape[0] + 2, step)
         # init label managers and legend list
         for row in range(norm_hist.shape[0]):
             mgr = LabelManager(direction="vertical")
