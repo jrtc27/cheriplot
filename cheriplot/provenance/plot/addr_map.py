@@ -271,9 +271,13 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._deref_load = defaultdict(lambda: [])
+        self._deref_store = defaultdict(lambda: [])
         # register the colors we use
         self._colors["load"] = colorConverter.to_rgb("#687a99")
         self._colors["store"] = colorConverter.to_rgb("#895106")
+        self._colors["load_cursor"] = colorConverter.to_rgb("#876899")
+        self._colors["store_cursor"] = colorConverter.to_rgb("#3e8905")
 
     def inspect(self, vertex):
         """Create a patch for every dereference in the node.
@@ -294,13 +298,13 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
             coords = ((data.cap.base, time), (data.cap.bound, time))
             if type_ == data.DerefType.DEREF_LOAD:
                 self._collection_map["load"].append(coords)
-                # off = patches.Circle((addr, data_y))
-                # self._deref_load.append(off)
+                self._deref_load["x"].append(addr)
+                self._deref_load["y"].append(time)
                 pass
             elif type_ == data.DerefType.DEREF_STORE:
                 self._collection_map["store"].append(coords)
-                # off = patches.Circle((addr, data_y))
-                # self._deref_store.append(off)
+                self._deref_store["x"].append(addr)
+                self._deref_store["y"].append(time)
                 pass
             elif type_ == data.DerefType.DEREF_CALL:
                 logger.warning("Plot call dereferences not yet supported")
@@ -353,10 +357,22 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
         dst[:,:,1] = np.repeat(store[:,2], 2).reshape((len(store),2))
         self._collection_map["store"] = dst
 
+    def get_patches(self, axes):
+        super().get_patches(axes)
+        axes.scatter(self._deref_load["x"], self._deref_load["y"],
+                     marker='s', s=10, linewidths=0, zorder=3,
+                     c=[self._colors["load_cursor"]])
+        axes.scatter(self._deref_store["x"], self._deref_store["y"],
+                     marker='s', s=10, linewidths=0, zorder=3,
+                     c=[self._colors["store_cursor"]])
+
+
     def get_legend(self):
         handles = [
-            Patch(color=self._colors["load"], label="load"),
-            Patch(color=self._colors["store"], label="store"),
+            Patch(color=self._colors["load"], label="load bounds"),
+            Patch(color=self._colors["load_cursor"], label="load cursor"),
+            Patch(color=self._colors["store"], label="store bounds"),
+            Patch(color=self._colors["store_cursor"], label="store cursor"),
         ]
         return handles
 
