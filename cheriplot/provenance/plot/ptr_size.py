@@ -60,7 +60,8 @@ class CapSizeHistogram:
         self.vmmap = vmmap
         """VMMap object representing the process memory map."""
 
-        self.n_bins = [0, 10, 20, 21, 22, 23, 64]
+        # Use 40 as an edge, since the default data capability has length 2^40
+        self.n_bins = [0, 10, 20, 21, 22, 23, 40, 64]
         """Bin edges for capability size, notice that the size is log2."""
 
         self.norm_histogram = pd.DataFrame(columns=self.n_bins[1:])
