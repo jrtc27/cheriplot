@@ -403,6 +403,7 @@ class PtrSizeCdfDriver(TaskDriver, BasePlotBuilder):
     def make_plot(self):
         super().make_plot()
         self.ax.set_xscale("log", basex=2)
+        self.ax.xaxis.set_major_locator(plt.LogLocator(base=2))
 
     def run(self):
         extra_pgm = []
