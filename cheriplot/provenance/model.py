@@ -63,12 +63,13 @@ class CheriNodeOrigin(IntEnum):
     SETBOUNDS = 1
     FROMPTR = 2
     ANDPERM = 3
+    GETPCCSETOFFSET = 4
     # aggregate nodes
-    PTR_SETBOUNDS = 4
+    PTR_SETBOUNDS = 5
     # system calls
     # the start and end are flags
-    SYS_MMAP = 5
-    SYS_MUNMAP = 6
+    SYS_MMAP = 6
+    SYS_MUNMAP = 7
 
 
 class ProvenanceGraphManager:

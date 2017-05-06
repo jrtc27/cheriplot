@@ -178,3 +178,18 @@ class MaskCFromPtr(SingleMaskBFSTransform):
             #     # remove cfromptr that are never stored or used in
             #     # a dereference
             #     self.vertex_mask[u] = True
+
+class MaskPermission(SingleMaskBFSTransform):
+    """
+    Transform that masks vertices with a given permission.
+    """
+
+    def __init__(self, graph, perm, invert=False):
+        super().__init__(graph)
+        self.perm = perm
+        self.invert = invert
+
+    def examine_vertex(self, u):
+        data = self.graph.vp.data[u]
+        if self.invert != data.cap.has_perm(self.perm):
+            self.vertex_mask[u] = True

@@ -273,11 +273,14 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
         super().__init__(*args, **kwargs)
         self._deref_load = defaultdict(lambda: [])
         self._deref_store = defaultdict(lambda: [])
+        self._deref_call = defaultdict(lambda: [])
         # register the colors we use
         self._colors["load"] = colorConverter.to_rgb("#687a99")
         self._colors["store"] = colorConverter.to_rgb("#895106")
         self._colors["load_cursor"] = colorConverter.to_rgb("#876899")
         self._colors["store_cursor"] = colorConverter.to_rgb("#3e8905")
+        self._colors["call"] = colorConverter.to_rgb("#053e89")
+        self._colors["call_cursor"] = colorConverter.to_rgb("#89053e")
 
     def inspect(self, vertex):
         """Create a patch for every dereference in the node.
@@ -307,7 +310,9 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
                 self._deref_store["y"].append(time)
                 pass
             elif type_ == data.DerefType.DEREF_CALL:
-                logger.warning("Plot call dereferences not yet supported")
+                self._collection_map["call"].append(coords)
+                self._deref_call["x"].append(addr)
+                self._deref_call["y"].append(time)
             self._clickable_element(vertex, time)
 
         if len(columns[0]):
@@ -365,6 +370,9 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
         axes.scatter(self._deref_store["x"], self._deref_store["y"],
                      marker='s', s=10, linewidths=0, zorder=3,
                      c=[self._colors["store_cursor"]])
+        axes.scatter(self._deref_call["x"], self._deref_call["y"],
+                     marker='s', s=10, linewidths=0, zorder=3,
+                     c=[self._colors["call_cursor"]])
 
 
     def get_legend(self):
@@ -373,6 +381,8 @@ class DerefPatchBuilder(BaseColorCodePatchBuilder):
             Patch(color=self._colors["load_cursor"], label="load cursor"),
             Patch(color=self._colors["store"], label="store bounds"),
             Patch(color=self._colors["store_cursor"], label="store cursor"),
+            Patch(color=self._colors["call"], label="call bounds"),
+            Patch(color=self._colors["call_cursor"], label="call cursor"),
         ]
         return handles
 

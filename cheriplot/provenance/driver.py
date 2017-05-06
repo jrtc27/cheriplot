@@ -27,7 +27,8 @@
 
 import logging
 
-from cheriplot.core import SubCommand, BaseTraceTaskDriver, ProgressTimer
+from cheriplot.core import SubCommand, BaseTraceTaskDriver, ProgressTimer, Option
+from cheriplot.provenance.model import CheriCapPerm
 from cheriplot.provenance.plot import (
     AddressMapPlotDriver, AddressMapDerefPlotDriver, PtrSizeDerefDriver,
     PtrSizeBoundDriver, PtrSizeCdfDriver)
@@ -46,6 +47,9 @@ class ProvenancePlotDriver(BaseTraceTaskDriver):
     ptrsize_cdf = SubCommand(PtrSizeCdfDriver)
     ptrsize_bound = SubCommand(PtrSizeBoundDriver)
     ptrsize_deref = SubCommand(PtrSizeDerefDriver)
+
+    no_exec = Option(help="Filter out executable capabilities", action="store_true")
+    no_data = Option(help="Filter out data capabilities", action="store_true")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -68,6 +72,12 @@ class ProvenancePlotDriver(BaseTraceTaskDriver):
             flat_transform(pgm, [MergeCFromPtr(pgm)])
         with ProgressTimer("Mask remaining cfromptr", logger):
             flat_transform(pgm, [MaskCFromPtr(pgm)])
+        if self.config.no_exec:
+            with ProgressTimer("Mask executable capabilities", logger):
+                flat_transform(pgm, [MaskPermission(pgm, CheriCapPerm.EXEC)])
+        if self.config.no_data:
+            with ProgressTimer("Mask data capabilities", logger):
+                flat_transform(pgm, [MaskPermission(pgm, CheriCapPerm.EXEC, True)])
 
         sub = self.config.subcommand_class(pgm, config=self.config)
         sub.run()

@@ -502,7 +502,20 @@ class PointerProvenanceParser(CallbackTraceParser):
         return False
 
     def scan_cgetpccsetoffset(self, inst, entry, regs, last_regs, idx):
-        return self.scan_cgetpcc(inst, entry, regs, last_regs, idx)
+        if not self._do_scan(entry):
+            return False
+        if self.regset.pcc is None:
+            real_pcc = CheriCap(inst.op0.value)
+            real_pcc.offset = entry.pc - real_pcc.base
+            # never seen anything in pcc so we create a new node
+            node = self.make_root_node(entry, real_pcc,
+                                       time=entry.cycles)
+            self.regset.pcc = node
+            logger.debug("cgetpccsetoffset: new node from pcc %s",
+                         regnum, self.dataset.vp.data[node])
+        node = self.make_node(entry, inst, origin=CheriNodeOrigin.GETPCCSETOFFSET)
+        self.regset[inst.op0.cap_index] = node
+        return False
 
     def scan_csetbounds(self, inst, entry, regs, last_regs, idx):
         """
@@ -572,6 +585,8 @@ class PointerProvenanceParser(CallbackTraceParser):
                     logger.error("Loading PCC without exec permissions? %s %s",
                                  inst, pcc_data)
                     raise RuntimeError("Loading PCC without exec permissions")
+                if inst.op0.cap_index == 12:
+                    pcc_data.add_call(entry.cycles, pcc_data.cap.base + pcc_data.cap.offset, None)
             else:
                 # we should create a node here but this should really
                 # not be happening, the node is None only when the
@@ -599,6 +614,11 @@ class PointerProvenanceParser(CallbackTraceParser):
                     logger.error("Loading PCC without exec permissions? %s %s",
                                  inst, pcc_data)
                     raise RuntimeError("Loading PCC without exec permissions")
+                if inst.op1.cap_index == 12:
+                    pcc_data.add_call(entry.cycles, pcc_data.cap.base + pcc_data.cap.offset, None)
+                else:
+                    logger.error("cjalr to c%d, not c12", inst.op1.cap_index)
+                    raise RuntimeError("cjalr not to c12")
             else:
                 # we should create a node here but this should really
                 # not be happening, the node is None only when the
