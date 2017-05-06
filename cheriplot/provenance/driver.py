@@ -31,7 +31,7 @@ from cheriplot.core import SubCommand, BaseTraceTaskDriver, ProgressTimer, Optio
 from cheriplot.provenance.model import CheriCapPerm
 from cheriplot.provenance.plot import (
     AddressMapPlotDriver, AddressMapDerefPlotDriver, PtrSizeDerefDriver,
-    PtrSizeBoundDriver, PtrSizeCdfDriver)
+    PtrSizeBoundDriver, PtrSizeCdfDriver, PtrPermDerefDriver)
 from cheriplot.provenance.parser import PointerProvenanceParser, ThreadedProvenanceParser
 from cheriplot.provenance.transforms import *
 
@@ -47,6 +47,7 @@ class ProvenancePlotDriver(BaseTraceTaskDriver):
     ptrsize_cdf = SubCommand(PtrSizeCdfDriver)
     ptrsize_bound = SubCommand(PtrSizeBoundDriver)
     ptrsize_deref = SubCommand(PtrSizeDerefDriver)
+    ptrperm_deref = SubCommand(PtrPermDerefDriver)
 
     no_exec = Option(help="Filter out executable capabilities", action="store_true")
     no_data = Option(help="Filter out data capabilities", action="store_true")

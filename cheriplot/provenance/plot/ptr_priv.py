@@ -30,6 +30,8 @@ import pandas as pd
 import logging
 import os
 
+from enum import IntEnum
+
 from scipy import stats
 from matplotlib import pyplot as plt
 from matplotlib.patches import Patch
@@ -42,6 +44,7 @@ from cheriplot.core import (
     BasePlotBuilder, PatchBuilder, LabelManager, AutoText, TaskDriver,
     Option, Argument)
 
+from cheriplot.provenance.model import CheriCapPerm
 from cheriplot.provenance.parser import PointerProvenanceParser, ThreadedProvenanceParser
 from cheriplot.provenance.transforms import *
 from cheriplot.provenance.plot import VMMapPlotDriver
@@ -50,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 class CapSizeHistogram:
     """
-    Base class for the histogram data structure building strategy
+    Base class for the size histogram data structure building strategy
     """
 
     def __init__(self, provenance_graph, vmmap):
@@ -61,13 +64,13 @@ class CapSizeHistogram:
         """VMMap object representing the process memory map."""
 
         # Use 40 as an edge, since the default data capability has length 2^40
-        self.n_bins = [0, 10, 20, 21, 22, 23, 40, 64]
+        self.bins = [0, 10, 20, 21, 22, 23, 40, 64]
         """Bin edges for capability size, notice that the size is log2."""
 
-        self.norm_histogram = pd.DataFrame(columns=self.n_bins[1:])
+        self.norm_histogram = pd.DataFrame(columns=self.bins[1:])
         """List of normalized histograms for each vmmap entry."""
 
-        self.abs_histogram = pd.DataFrame(columns=self.n_bins[1:])
+        self.abs_histogram = pd.DataFrame(columns=self.bins[1:])
         """List of histograms for each vmmap entry."""
 
         self._build_histogram()
@@ -79,7 +82,7 @@ class CapSizeHistogram:
                 continue
             # the bin size is logarithmic
             data = np.log2(data)
-            h, b = np.histogram(data, bins=self.n_bins)
+            h, b = np.histogram(data, bins=self.bins)
             # append histogram to the dataframes
             self.abs_histogram.loc[vm_entry] = h
             self.norm_histogram.loc[vm_entry] = h / np.sum(h)
@@ -90,6 +93,97 @@ class CapSizeHistogram:
         for the histogram for each entry in the vmmap entry.
         """
         return None
+
+    # labels are set to "2^<bin_stat_size>-2^<bin_end_size>"
+    def bin_label(self, prev_bin, cur_bin):
+        if prev_bin is None:
+            prev_bin = 0
+        return "2^%d-2^%d" % (prev_bin, cur_bin)
+
+    def bar_label(self, entry):
+        if entry.path:
+            label_name = os.path.basename(entry.path)
+        else:
+            label_name = "0x%x" % entry.start
+        return "(%s) %s" % (entry.perms, label_name)
+
+
+class CapPermCategory(IntEnum):
+    NONE = 0
+    R   = 1
+    W   = 2
+    X   = 3
+    RW  = 4
+    RX  = 5
+    WX  = 6
+    RWX = 7
+    MAX = 7
+
+
+class CapPermHistogram:
+    """
+    Base class for the permissions histogram data structure building strategy
+    """
+
+    def __init__(self, provenance_graph, vmmap):
+        self.graph = provenance_graph
+        """The provenance graph"""
+
+        self.bins = ["capabilities"]
+        """List of permissions in sorted order"""
+
+        self.norm_histogram = pd.DataFrame(columns=self.bins)
+        """List of normalized histograms for each vmmap entry."""
+
+        self.abs_histogram = pd.DataFrame(columns=self.bins)
+        """List of histograms for each vmmap entry."""
+
+        self._build_histogram()
+
+    def _build_histogram(self):
+        hist_data = self._build_histogram_input()
+        total = 0
+        for perms, data in enumerate(hist_data):
+            if data == 0:
+                continue
+            # append histogram to the dataframes
+            self.abs_histogram.loc[perms] = np.array([data])
+            total += data
+        for perms in self.abs_histogram.index:
+            self.norm_histogram.loc[perms] = self.abs_histogram.loc[perms] / total
+
+    def _build_histogram_input(self):
+        """
+        Build the input data structure containing a list of data to use
+        for the histogram for each entry in the vmmap entry.
+        """
+        return None
+
+    def _cap_permcat(self, cap):
+        perms = cap.permissions
+        r = bool(perms & (CheriCapPerm.LOAD | CheriCapPerm.CAP_LOAD))
+        w = bool(perms & (CheriCapPerm.STORE | CheriCapPerm.CAP_STORE | CheriCapPerm.CAP_STORE_LOCAL))
+        x = bool(perms & CheriCapPerm.EXEC)
+        if r:
+            if w:
+                if x: return CapPermCategory.RWX
+                else: return CapPermCategory.RW
+            else:
+                if x: return CapPermCategory.RX
+                else: return CapPermCategory.R
+        else:
+            if w:
+                if x: return CapPermCategory.WX
+                else: return CapPermCategory.W
+            else:
+                if x: return CapPermCategory.X
+                else: return CapPermCategory.NONE
+
+    def bin_label(self, prev_bin, cur_bin):
+        return cur_bin
+
+    def bar_label(self, permcat):
+        return CapPermCategory(permcat).name
 
 
 class CapSizeDerefHistogram(CapSizeHistogram):
@@ -165,6 +259,29 @@ class CapSizeBoundHistogram(CapSizeHistogram):
         return hist_data
 
 
+class CapPermDerefHistogram(CapPermHistogram):
+    """
+    Histogram that takes into account capabilities at dereference time.
+    Note that there is an amount of overcounting due to locations that
+    are heavily accessed.
+    """
+
+    def _build_histogram_input(self):
+        hist_data = np.zeros(CapPermCategory.MAX+1, dtype=np.int)
+
+        progress = ProgressPrinter(self.graph.num_vertices(),
+                                   desc="Sorting capability references")
+        # the loop checks, for each vertex in the graph, its perms when
+        # dereferenced, and increments the count for that type
+        for node in self.graph.vertices():
+            data = self.graph.vp.data[node]
+            permcat = self._cap_permcat(data.cap)
+            hist_data[permcat] += len(data.deref["time"])
+            progress.advance()
+        progress.finish()
+        return hist_data
+
+
 class HistogramPatchBuilder(PatchBuilder):
     """
     Process an histogram to produce the bar plot
@@ -190,7 +307,7 @@ class HistogramPatchBuilder(PatchBuilder):
             "This patch builder can process only a single histogram"
         self.hist = hist
         self.colormap = [plt.cm.Dark2(i) for i in
-                         np.linspace(0, 0.9, len(hist.n_bins))]
+                         np.linspace(0, 0.9, len(hist.bins))]
 
     def _get_positions(self):
         """X locations of the histogram bars."""
@@ -199,12 +316,10 @@ class HistogramPatchBuilder(PatchBuilder):
 
     def get_legend(self):
         legend_handles = []
-        bin_start = 0
-        # skip the first column that holds the vmmap entry for the row
-        # labels are set to "2^<bin_stat_size>-2^<bin_end_size>"
-        for idx,bin_limit in enumerate(self.hist.norm_histogram.columns):
-            label = "2^%d-2^%d" % (bin_start, bin_limit)
-            bin_start = bin_limit
+        prev_bin = None
+        for idx, cur_bin in enumerate(self.hist.norm_histogram.columns):
+            label = self.hist.bin_label(prev_bin, cur_bin)
+            prev_bin = cur_bin
             handle = Patch(color=self.colormap[idx], label=label)
             legend_handles.append(handle)
         return legend_handles
@@ -218,20 +333,15 @@ class HistogramPatchBuilder(PatchBuilder):
 
     def get_xlabels(self):
         ticklabels = []
-        for entry in self.hist.norm_histogram.index:
-            if entry.path:
-                label_name = os.path.basename(entry.path)
-            else:
-                label_name = "0x%x" % entry.start
-            ticklabel = "(%s) %s" % (entry.perms, label_name)
-            ticklabels.append(ticklabel)
+        for idx in self.hist.norm_histogram.index:
+            ticklabels.append(self.hist.bar_label(idx))
         return ticklabels
 
     def get_yticks(self):
         return [0, 1]
 
     def get_ylabels(self):
-        return ["0", "100"]
+        return ["0%", "100%"]
 
     def get_patches(self, axes):
         norm_hist = self.hist.norm_histogram
@@ -264,14 +374,9 @@ class HistogramPatchBuilder(PatchBuilder):
                 axes.add_artist(txt)
 
 
-class PtrSizePlotDriver(VMMapPlotDriver, ExternalLegendTopPlotBuilder):
+class PtrPrivPlotDriver(VMMapPlotDriver, ExternalLegendTopPlotBuilder):
 
     histogram_builder_class = None
-
-    def _get_xlabels_kwargs(self):
-        kw = super()._get_xlabels_kwargs()
-        kw["rotation"] = "vertical"
-        return kw
 
     def run(self):
         self._vmmap_parser.parse()
@@ -279,6 +384,14 @@ class PtrSizePlotDriver(VMMapPlotDriver, ExternalLegendTopPlotBuilder):
         hist = self.histogram_builder_class(self._provenance_graph, vmmap)
         self.register_patch_builder([hist], HistogramPatchBuilder(self.fig))
         self.process(out_file=self.config.outfile)
+
+
+class PtrSizePlotDriver(PtrPrivPlotDriver):
+
+    def _get_xlabels_kwargs(self):
+        kw = super()._get_xlabels_kwargs()
+        kw["rotation"] = "vertical"
+        return kw
 
 
 class PtrSizeDerefDriver(PtrSizePlotDriver):
@@ -295,6 +408,14 @@ class PtrSizeBoundDriver(PtrSizePlotDriver):
     x_label = ""
     y_label = ""
     histogram_builder_class = CapSizeBoundHistogram
+
+
+class PtrPermDerefDriver(PtrPrivPlotDriver):
+
+    title = "Capability dereference permissions"
+    x_label = ""
+    y_label = ""
+    histogram_builder_class = CapPermDerefHistogram
 
 
 class PtrBoundCdf:
