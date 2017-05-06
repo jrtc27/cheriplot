@@ -122,7 +122,8 @@ class MaskNullAndKernelVertices(SingleMaskBFSTransform):
     def examine_vertex(self, u):
         data = self.graph.vp.data[u]
         if ((data.pc != 0 and data.is_kernel) or
-            (data.cap.length == 0 and data.cap.base == 0)):
+            (data.cap.length == 0 and data.cap.base == 0) or
+            (data.cap.valid and data.cap.length == 0xffffffffffffffff)):
             self.vertex_mask[u] = True
 
 
